@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión Escolar Avanzada & Control QR</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
+
+    <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-40">
+        <div class="container mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <i class="fa-solid fa-graduation-cap"></i> Control Escolar Pro
+            </h1>
+            <div class="flex flex-wrap gap-2">
+                <button onclick="exportarBackup()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow">
+                    <i class="fa-solid fa-download"></i> Exportar Backup (JS)
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <section class="lg:col-span-2 space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-users text-indigo-500"></i> Listado de Estudiantes
+                    </h2>
+                    <button onclick="modalEstudiante()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1">
+                        <i class="fa-solid fa-plus"></i> Nuevo
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-100">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-xs uppercase font-semibold border-b border-slate-100">
+                                <th class="p-4">ID</th>
+                                <th class="p-4">Nombre Completo</th>
+                                <th class="p-4">Grado / Grupo</th>
+                                <th class="p-4 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaEstudiantes" class="divide-y divide-slate-100 text-sm">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-qrcode text-indigo-500"></i> Escáner de Asistencia QR
+                </h2>
+                <p class="text-xs text-slate-500 mb-4">El QR debe contener el número ID del estudiante.</p>
+                
+                <div class="rounded-xl overflow-hidden bg-slate-900 aspect-video flex flex-col items-center justify-center relative text-white" id="contenedorCamara">
+                    <div id="reader" class="w-full h-full"></div>
+                    <div id="placeholderCamara" class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-slate-800">
+                        <i class="fa-solid fa-camera text-4xl mb-2 text-slate-500"></i>
+                        <span class="text-sm font-medium">Cámara Inactiva</span>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex gap-2">
+                    <button id="btnIniciarCamara" onclick="iniciarEscaneo()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-center py-2.5 rounded-lg text-sm font-medium transition">
+                        Encender Cámara
+                    </button>
+                    <button id="btnDetenerCamara" onclick="detenerEscaneo()" class="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-center py-2.5 rounded-lg text-sm font-medium transition hidden">
+                        Apagar Cámara
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-days text-indigo-500"></i> Calendario de Control
+                    </h2>
+                    <input type="date" id="fechaFiltro" onchange="cargarAsistencias()" class="border border-slate-200 rounded-lg p-1.5 text-sm bg-slate-50 focus:outline-indigo-500">
+                </div>
+
+                <div class="flex justify-between mb-4">
+                    <span class="text-xs font-semibold uppercase text-slate-400">Estado de Asistencias</span>
+                    <button onclick="modalAsistenciaManual()" class="text-xs text-indigo-600 font-semibold hover:underline flex items-center gap-1">
+                        <i class="fa-solid fa-pen-to-square"></i> Gestión Manual
+                    </button>
+                </div>
+
+                <div class="space-y-2 max-h-60 overflow-y-auto pr-1" id="listaAsistencias">
+                    </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // --- BASE DE DATOS INICIAL (20 Registros requeridos) ---
+        const estudiantesIniciales = [
+            { id: 1, nombre: "Alejandro Gómez", grado: "5to A" },
+            { id: 2, nombre: "Sofía Rodríguez", grado: "5to A" },
+            { id: 3, nombre: "Mateo Fernández", grado: "5to B" },
+            { id: 4, nombre: "Valentina Martínez", grado: "5to B" },
+            { id: 5, nombre: "Santiago Pérez", grado: "6to A" },
+            { id: 6, nombre: "Camila García", grado: "6to A" },
+            { id: 7, nombre: "Lucas Sánchez", grado: "6to B" },
+            { id: 8, nombre: "Isabella Romero", grado: "6to B" },
+            { id: 9, nombre: "Diego Díaz", grado: "4to A" },
+            { id: 10, nombre: "Elena Torres", grado: "4to A" },
+            { id: 11, nombre: "Nicolás López", grado: "4to B" },
+            { id: 12, nombre: "Mariana Ramirez", grado: "4to B" },
+            { id: 13, nombre: "Samuel Álvarez", grado: "3ro A" },
+            { id: 14, nombre: "Valeria Ruiz", grado: "3ro A" },
+            { id: 15, nombre: "Benjamín Castro", grado: "3ro B" },
+            { id: 16, nombre: "Daniela Morales", grado: "3ro B" },
+            { id: 17, nombre: "Emanuel Herrera", grado: "2do A" },
+            { id: 18, font: "Victoria Medina", nombre: "Victoria Medina", grado: "2do A" },
+            { id: 19, nombre: "Gabriel Flores", grado: "2do B" },
+            { id: 20, nombre: "Sara Jiménez", grado: "2do B" }
+        ];
+
+        // --- INICIALIZACIÓN DE VARIABLES ---
+        let estudiantes = JSON.parse(localStorage.getItem('alumnos_db')) || estudiantesIniciales;
+        let asistencias = JSON.parse(localStorage.getItem('asistencias_db')) || [];
+        let html5QrCode = null;
+
+        // Establecer fecha de hoy en el input del calendario
+        document.getElementById('fechaFiltro').value = new Date().toISOString().split('T')[0];
+
+        // Guardar Datos en LocalStorage
+        function guardarLocal() {
+            localStorage.setItem('alumnos_db', JSON.stringify(estudiantes));
+            localStorage.setItem('asistencias_db', JSON.stringify(asistencias));
+        }
+
+        // --- RENDERIZADO DE VISTAS ---
+        function cargarEstudiantes() {
+            const tbody = document.getElementById('tablaEstudiantes');
+            tbody.innerHTML = '';
+            
+            estudiantes.forEach(est => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-4 font-semibold text-slate-500">#${est.id}</td>
+                        <td class="p-4 font-medium text-slate-900">${est.nombre}</td>
+                        <td class="p-4 text-slate-600">${est.grado}</td>
+                        <td class="p-4">
+                            <div class="flex justify-center gap-2">
+                                <button onclick="modalEstudiante(${est.id})" class="text-amber-600 hover:bg-amber-50 p-2 rounded-lg transition" title="Editar">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                                <button onclick="eliminarEstudiante(${est.id})" class="text-rose-600 hover:bg-rose-50 p-2 rounded-lg transition" title="Eliminar">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            guardarLocal();
+        }
+
+        function cargarAsistencias() {
+            const fechaSeleccionada = document.getElementById('fechaFiltro').value;
+            const contenedor = document.getElementById('listaAsistencias');
+            contenedor.innerHTML = '';
+
+            // Filtrar las asistencias de la fecha elegida
+            const delDia = asistencias.filter(a => a.fecha === fechaSeleccionada);
+
+            estudiantes.forEach(est => {
+                const registro = delDia.find(a => a.estudianteId == est.id);
+                let badge = `<span class="bg-rose-100 text-rose-700 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fa-solid fa-xmark"></i> Falta</span>`;
+                let horaInfo = '';
+
+                if (registro) {
+                    if (registro.estado === 'Asistió') {
+                        badge = `<span class="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fa-solid fa-check"></i> Presente</span>`;
+                        horaInfo = `<span class="text-xs text-slate-400 font-mono">${registro.hora}</span>`;
+                    } else if (registro.estado === 'Tardanza') {
+                        badge = `<span class="bg-amber-100 text-amber-700 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fa-solid fa-clock"></i> Tardanza</span>`;
+                        horaInfo = `<span class="text-xs text-slate-400 font-mono">${registro.hora}</span>`;
+                    } else if (registro.estado === 'Justificado') {
+                        badge = `<span class="bg-sky-100 text-sky-700 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fa-solid fa-envelope"></i> Justificado</span>`;
+                    }
+                }
+
+                contenedor.innerHTML += `
+                    <div class="flex justify-between items-center p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-800">${est.nombre}</p>
+                            <p class="text-xs text-slate-500">${est.grado} ${horaInfo}</p>
+                        </div>
+                        <div>${badge}</div>
+                    </div>
+                `;
+            });
+        }
+
+        // --- CONTROL CRUD ESTUDIANTES CON SWEETALERT2 ---
+        async function modalEstudiante(id = null) {
+            const est = id ? estudiantes.find(e => e.id === id) : null;
+            const titulo = est ? 'Editar Información' : 'Registrar Nuevo Estudiante';
+            
+            const { value: formValues } = await Swal.fire({
+                title: `<span class="text-lg font-bold">${titulo}</span>`,
+                html: `
+                    <div class="text-left space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Nombre Completo</label>
+                            <input id="swal-nombre" class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:outline-indigo-500" value="${est ? est.nombre : ''}" placeholder="Ej. Juan Pérez">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Grado o Sección</label>
+                            <input id="swal-grado" class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:outline-indigo-500" value="${est ? est.grado : ''}" placeholder="Ej. 5to A">
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Guardar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#4f46e5',
+                preConfirm: () => {
+                    const nombre = document.getElementById('swal-nombre').value.trim();
+                    const grado = document.getElementById('swal-grado').value.trim();
+                    if (!nombre || !grado) {
+                        Swal.showValidationMessage('Todos los campos son obligatorios');
+                        return false;
+                    }
+                    return { nombre, grado };
+                }
+            });
+
+            if (formValues) {
+                if (est) {
+                    // Editar
+                    est.nombre = formValues.nombre;
+                    est.grado = formValues.grado;
+                    Swal.fire('¡Actualizado!', 'Datos modificados con éxito.', 'success');
+                } else {
+                    // Crear nuevo ID correlativo o incremental
+                    const nuevoId = estudiantes.length > 0 ? Math.max(...estudiantes.map(e => e.id)) + 1 : 1;
+                    estudiantes.push({ id: nuevoId, ...formValues });
+                    Swal.fire('¡Registrado!', `Estudiante creado con el ID #${nuevoId}`, 'success');
+                }
+                cargarEstudiantes();
+                cargarAsistencias();
+            }
+        }
+
+        function eliminarEstudiante(id) {
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: "Esta acción removerá permanentemente al estudiante del listado.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    estudiantes = estudiantes.filter(e => e.id !== id);
+                    asistencias = asistencias.filter(a => a.estudianteId !== id); // limpia historial
+                    Swal.fire('Eliminado', 'El estudiante ha sido borrado.', 'success');
+                    cargarEstudiantes();
+                    cargarAsistencias();
+                }
+            });
+        }
+
+        // --- GESTIÓN INTERACTIVA MANUAL DE ASISTENCIA ---
+        async function modalAsistenciaManual() {
+            const fechaSeleccionada = document.getElementById('fechaFiltro').value;
+            
+            // Construir opciones de estudiantes para el Select
+            let opcionesEstudiantes = estudiantes.map(e => `<option value="${e.id}">${e.nombre} (${e.grado})</option>`).join('');
+
+            const { value: formValues } = await Swal.fire({
+                title: '<span class="text-lg font-bold">Gestión de Asistencia</span>',
+                html: `
+                    <div class="text-left space-y-3">
+                        <p class="text-xs text-indigo-600 font-semibold">Fecha de Gestión: ${fechaSeleccionada}</p>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Seleccionar Estudiante</label>
+                            <select id="swal-ast-id" class="w-full border border-slate-200 rounded-lg p-2 text-sm bg-white focus:outline-indigo-500">
+                                ${opcionesEstudiantes}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Estado</label>
+                            <select id="swal-ast-estado" class="w-full border border-slate-200 rounded-lg p-2 text-sm bg-white focus:outline-indigo-500">
+                                <option value="Asistió">Presente</option>
+                                <option value="Tardanza">Tardanza</option>
+                                <option value="Justificado">Justificado</option>
+                                <option value="Falta">Remover / Falta</option>
+                            </select>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Aplicar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#4f46e5',
+                preConfirm: () => {
+                    return {
+                        estudianteId: parseInt(document.getElementById('swal-ast-id').value),
+                        estado: document.getElementById('swal-ast-estado').value
+                    }
+                }
+            });
+
+            if (formValues) {
+                registrarAsistenciaLogica(formValues.estudianteId, fechaSeleccionada, formValues.estado);
+                Swal.fire('Éxito', 'Estado de asistencia guardado de manera manual.', 'success');
+            }
+        }
+
+        // Lógica unificada para procesar el estado en la BD
+        function registrarAsistenciaLogica(estudianteId, fecha, estado) {
+            // Eliminar registro existente previo del mismo alumno en el día
+            asistencias = asistencias.filter(a => !(a.estudianteId == estudianteId && a.fecha === fecha));
+
+            if (estado !== 'Falta') {
+                const ahora = new Date();
+                const horaString = ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                asistencias.push({
+                    estudianteId,
+                    fecha,
+                    hora: horaString,
+                    estado
+                });
+            }
+            guardarLocal();
+            cargarAsistencias();
+        }
+
+        // --- PROCESAMIENTO ESCÁNER QR (CÁMARA MÓVIL) ---
+        function iniciarEscaneo() {
+            document.getElementById('placeholderCamara').classList.add('hidden');
+            document.getElementById('btnIniciarCamara').classList.add('hidden');
+            document.getElementById('btnDetenerCamara').classList.remove('hidden');
+
+            html5QrCode = new Html5Qrcode("reader");
+            
+            // Configuración optimizada para smartphones (cámara trasera por defecto)
+            const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+            
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                config,
+                (decodedText) => {
+                    // Acción al leer código QR correctamente
+                    procesarLecturaQR(decodedText);
+                },
+                (errorMessage) => {
+                    // Error de escaneo continuo pasivo (se ignora para fluidez)
+                }
+            ).catch(err => {
+                Swal.fire('Error de Cámara', 'No se pudo acceder a la cámara del dispositivo móvil.', 'error');
+                detenerEscaneo();
+            });
+        }
+
+        function detenerEscaneo() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('placeholderCamara').classList.remove('hidden');
+                    document.getElementById('btnIniciarCamara').classList.remove('hidden');
+                    document.getElementById('btnDetenerCamara').classList.add('hidden');
+                }).catch(err => console.error(err));
+            }
+        }
+
+        function procesarLecturaQR(idEscaneado) {
+            const estudianteId = parseInt(idEscaneado.trim());
+            const estudiante = estudiantes.find(e => e.id === estudianteId);
+            const fechaHoy = new Date().toISOString().split('T')[0];
+
+            if (!estudiante) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Código Inválido',
+                    text: `El código QR (ID #${idEscaneado}) no corresponde a ningún alumno.`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                return;
+            }
+
+            // Registrar asistencia automáticamente como Presente ('Asistió')
+            registrarAsistenciaLogica(estudianteId, fechaHoy, 'Asistió');
+
+            // Feedback visual exitoso e interactivo
+            Swal.fire({
+                icon: 'success',
+                title: 'Asistencia Registrada',
+                text: `${estudiante.nombre} - ${estudiante.grado}`,
+                timer: 2500,
+                showConfirmButton: true,
+                confirmButtonColor: '#4f46e5'
+            });
+        }
+
+        // --- SISTEMA DE BACKUP EXPORTABLE A ARCHIVO JS ---
+        function exportarBackup() {
+            const datosBackup = {
+                estudiantes: estudiantes,
+                asistencias: asistencias,
+                exportadoEn: new Date().toISOString()
+            };
+
+            // Estructura el string de salida simulando un módulo o variable global JS
+            const contenidoArchivo = `/**
+ * BACKUP DE DATOS GENERADO AUTOMÁTICAMENTE
+ * Fecha de exportación: ${datosBackup.exportadoEn}
+ */
+
+const BACKUP_ESCOLAR_DATA = ${JSON.stringify(datosBackup, null, 4)};
+console.log("Backup cargado correctamente.", BACKUP_ESCOLAR_DATA);
+`;
+
+            // Crear link de descarga nativo del navegador
+            const blob = new Blob([contenidoArchivo], { type: "application/javascript;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `data_backup_${new Date().toISOString().split('T')[0]}.js`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            Swal.fire('¡Copia de Seguridad!', 'El archivo JS con los respaldos se ha descargado.', 'success');
+        }
+
+        // Arranque Inicial de Datos
+        window.onload = () => {
+            cargarEstudiantes();
+            cargarAsistencias();
+        };
+    </script>
+</body>
+</html>
